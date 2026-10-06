@@ -6,15 +6,17 @@ import type { ActivityDTO, ViewerDTO } from "@/lib/types";
 import { Box, Counter } from "./ui";
 import { cn } from "@/lib/cn";
 
-export function AchievementGrid({ unlocked }: { unlocked: ViewerDTO["achievements"] }) {
+export function AchievementGrid({ unlocked, onlyUnlocked = false }: { unlocked: ViewerDTO["achievements"]; onlyUnlocked?: boolean }) {
   const have = new Map(unlocked.map((a) => [a.key, a.unlockedAt]));
+  const list = onlyUnlocked ? ACHIEVEMENTS.filter((a) => have.has(a.key)) : ACHIEVEMENTS;
+  if (!list.length) return null;
   return (
     <section>
       <h2 className="mb-3 flex items-center gap-2 text-base font-semibold">
         Achievements <Counter>{`${have.size}/${ACHIEVEMENTS.length}`}</Counter>
       </h2>
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
-        {ACHIEVEMENTS.map((a) => {
+        {list.map((a) => {
           const at = have.get(a.key);
           return (
             <div
@@ -47,6 +49,10 @@ const KIND_TEXT: Record<ActivityDTO["kind"], string> = {
   perfect_day: "Bonus",
   achievement: "Unlocked",
   reward: "Redeemed",
+  freeze_purchase: "Bought",
+  freeze_used: "",
+  quest: "Quest",
+  mastery: "Mastery:",
 };
 
 export function ActivityFeed({ items, today }: { items: ActivityDTO[]; today: DateKey }) {

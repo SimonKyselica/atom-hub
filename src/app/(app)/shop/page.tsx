@@ -14,7 +14,7 @@ export default async function ShopPage() {
         <h1 className="text-xl font-semibold">Rewards shop</h1>
         <p className="text-sm text-muted">Spend the coins you earn on treats you set yourself.</p>
       </div>
-      <Shop rewards={rewards} history={history} coins={user.coins} today={userToday(user)} />
+      <Shop rewards={rewards} history={history} coins={user.coins} freezes={user.freezes ?? 0} today={userToday(user)} />
     </>
   );
 }

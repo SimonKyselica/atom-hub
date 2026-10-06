@@ -1,8 +1,8 @@
 // Atom Hub service worker — makes the app installable, fast and usable offline (read-only).
-const VERSION = "v1";
+const VERSION = "v2";
 const STATIC_CACHE = `atom-static-${VERSION}`;
 const PAGE_CACHE = `atom-pages-${VERSION}`;
-const PRECACHE = ["/offline", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
+const PRECACHE = ["/offline", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/badge-96.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(STATIC_CACHE).then((cache) => cache.addAll(PRECACHE)));
@@ -61,4 +61,70 @@ self.addEventListener("fetch", (event) => {
     );
   }
   // Everything else (RSC payloads, Server Actions) goes straight to the network.
+});
+
+// ---------- Push notifications ----------
+
+const ICON = "/icons/icon-192.png";
+const BADGE = "/icons/badge-96.png"; // monochrome, for the Android status bar
+
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: "Atom Hub", body: event.data?.text() };
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || "Atom Hub", {
+      body: data.body || "",
+      icon: ICON,
+      badge: BADGE,
+      tag: data.tag,
+      renotify: Boolean(data.tag),
+      actions: data.actions || [],
+      data: { url: data.url || "/", ...(data.data || {}) },
+    }),
+  );
+});
+
+async function openUrl(url) {
+  const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  for (const client of windows) {
+    if ("focus" in client) {
+      await client.focus();
+      if ("navigate" in client) await client.navigate(url);
+      return;
+    }
+  }
+  await self.clients.openWindow(url);
+}
+
+self.addEventListener("notificationclick", (event) => {
+  const data = event.notification.data || {};
+  event.notification.close();
+
+  // "✓ Mark done" straight from the notification — no need to open the app.
+  if (event.action === "done" && data.habitId) {
+    event.waitUntil(
+      fetch(`/api/habits/${data.habitId}/check`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ date: data.date }),
+      })
+        .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+        .then((res) =>
+          self.registration.showNotification(`✓ ${data.name || "Habit"} done`, {
+            body: res.xp > 0 ? `+${res.xp} XP · +${res.coins} coins` : "Already logged for today.",
+            icon: ICON,
+            badge: BADGE,
+            tag: `habit-${data.habitId}`,
+          }),
+        )
+        .catch(() => openUrl(data.url || "/")),
+    );
+    return;
+  }
+
+  event.waitUntil(openUrl(data.url || "/"));
 });

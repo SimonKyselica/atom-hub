@@ -5,9 +5,11 @@ import { CoinAmount, LevelCard } from "@/components/level-badge";
 import { AchievementGrid, ActivityFeed } from "@/components/profile";
 import { LogoutButton, SettingsForm } from "@/components/profile-client";
 import { InstallCard } from "@/components/pwa";
+import { NotificationSettings, PublicProfileSettings } from "@/components/settings-cards";
 import { Box } from "@/components/ui";
 import { requireUser, userToday } from "@/lib/dal";
-import { getActivity, getContributions, getProfileCounts, toViewer } from "@/lib/data";
+import { getActivity, getContributions, getFrozen, getProfileCounts, toViewer } from "@/lib/data";
+import { Habit, PushSubscription } from "@/lib/models";
 import { parseKey } from "@/lib/dates";
 import { dayStreak, longestDayStreak } from "@/lib/streaks";
 
@@ -17,13 +19,17 @@ export default async function ProfilePage() {
   const user = await requireUser();
   const viewer = toViewer(user);
   const today = userToday(user);
-  const [counts, activity, totals] = await Promise.all([
+  const [counts, activity, totals, frozenList, devices, reminderCount] = await Promise.all([
     getContributions(user._id),
     getActivity(user._id),
     getProfileCounts(user._id),
+    getFrozen(user._id),
+    PushSubscription.countDocuments({ userId: user._id }),
+    Habit.countDocuments({ userId: user._id, archived: false, reminderTime: { $ne: null } }),
   ]);
 
   const dates = new Set(Object.keys(counts));
+  const frozen = new Set(frozenList);
   const firstYear = parseKey(
     [...dates].reduce((min, d) => (d < min ? d : min), today),
   ).getUTCFullYear();
@@ -33,8 +39,9 @@ export default async function ProfilePage() {
   const stats = [
     { label: "Total XP", value: user.xp.toLocaleString("en-US") },
     { label: "Contributions", value: (totals.habitsDone + totals.todosDone).toLocaleString("en-US") },
-    { label: "Current streak", value: `${dayStreak(dates, today)} days` },
-    { label: "Longest streak", value: `${longestDayStreak(dates)} days` },
+    { label: "Current streak", value: `${dayStreak(dates, today, frozen)} days` },
+    { label: "Longest streak", value: `${longestDayStreak(dates, frozen)} days` },
+    { label: "Streak freezes", value: `❄️ ${viewer.freezes}` },
     { label: "Perfect days", value: totals.perfectDays },
     { label: "Todos closed", value: totals.todosDone },
     { label: "Active habits", value: totals.activeHabits },
@@ -67,12 +74,19 @@ export default async function ProfilePage() {
 
       <div className="min-w-0 space-y-8">
         <AchievementGrid unlocked={viewer.achievements} />
-        <OverallGraph counts={counts} today={today} weekStart={viewer.weekStart} years={years} />
+        <OverallGraph counts={counts} today={today} weekStart={viewer.weekStart} years={years} frozen={frozenList} />
         <ActivityFeed items={activity} today={today} />
 
         <section className="space-y-4">
           <h2 className="text-base font-semibold">Settings</h2>
           <InstallCard />
+          <NotificationSettings
+            vapidKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? null}
+            digest={viewer.todoDigest}
+            devices={devices}
+            reminderCount={reminderCount}
+          />
+          <PublicProfileSettings enabled={viewer.publicEnabled} showHabits={viewer.publicShowHabits} slug={viewer.publicSlug} />
           <Box className="p-4">
             <SettingsForm name={viewer.name} weekStart={viewer.weekStart} timezone={viewer.timezone} />
           </Box>

@@ -2,6 +2,7 @@
 import type { Achievement, AchievementKey } from "./achievements";
 import type { DateKey } from "./dates";
 import type { Difficulty, Palette } from "./game";
+import type { Recurrence } from "./recurrence";
 import type { HabitStats } from "./streaks";
 
 export type HabitDTO = {
@@ -15,6 +16,7 @@ export type HabitDTO = {
   difficulty: Difficulty;
   palette: Palette;
   startDate: DateKey;
+  reminderTime: string | null;
   archived: boolean;
 };
 
@@ -24,6 +26,8 @@ export type HabitWithData = HabitDTO & {
   values: Record<DateKey, number>;
 };
 
+export type SubtaskDTO = { id: string; title: string; done: boolean };
+
 export type TodoDTO = {
   id: string;
   title: string;
@@ -32,6 +36,8 @@ export type TodoDTO = {
   difficulty: Difficulty;
   done: boolean;
   doneDate: DateKey | null;
+  recurrence: Recurrence | null;
+  subtasks: SubtaskDTO[];
 };
 
 export type RewardDTO = {
@@ -44,7 +50,7 @@ export type RewardDTO = {
 
 export type ActivityDTO = {
   id: string;
-  kind: "habit" | "todo" | "perfect_day" | "achievement" | "reward";
+  kind: "habit" | "todo" | "perfect_day" | "achievement" | "reward" | "freeze_purchase" | "freeze_used" | "quest" | "mastery";
   label: string;
   icon: string;
   xp: number;
@@ -62,6 +68,11 @@ export type ViewerDTO = {
   weekStart: number;
   timezone: string;
   achievements: { key: AchievementKey; unlockedAt: string }[];
+  freezes: number;
+  todoDigest: { enabled: boolean; time: string };
+  publicSlug: string | null;
+  publicEnabled: boolean;
+  publicShowHabits: boolean;
 };
 
 export type HabitInput = {
@@ -73,6 +84,7 @@ export type HabitInput = {
   days: number[];
   difficulty: Difficulty;
   palette: Palette;
+  reminderTime: string | null;
 };
 
 export type TodoInput = {
@@ -80,6 +92,9 @@ export type TodoInput = {
   notes?: string;
   dueDate: DateKey | null;
   difficulty: Difficulty;
+  recurrence?: Recurrence | null;
+  /** Full list on edit; existing items keep their id. */
+  subtasks?: { id?: string; title: string; done: boolean }[];
 };
 
 export type RewardInput = { name: string; emoji: string; cost: number };
@@ -94,6 +109,19 @@ export type GameResult = {
   perfectDay: "gained" | "lost" | null;
   streak?: number;
   multiplier?: number;
+  /** Set when this completion pushed the habit into a new mastery tier. */
+  mastery?: { habit: string; emoji: string; tier: { name: string; icon: string; coins: number } };
+  freezeRefunded?: boolean;
 };
 
 export type ActionError = { ok: false; error: string };
+
+export type QuestDTO = {
+  key: string;
+  icon: string;
+  title: string;
+  goal: number;
+  progress: number;
+  reward: number;
+  claimed: boolean;
+};

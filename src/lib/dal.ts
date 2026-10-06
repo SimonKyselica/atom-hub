@@ -6,6 +6,7 @@ import { connectDB } from "./db";
 import { User, type IUser } from "./models";
 import { SESSION_COOKIE, verifySession } from "./session-token";
 import { dateKeyInZone } from "./dates";
+import { settleMissedDays } from "./freeze";
 
 export const getSessionUserId = cache(async () => {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
@@ -16,7 +17,10 @@ export const getCurrentUser = cache(async (): Promise<IUser | null> => {
   const id = await getSessionUserId();
   if (!id) return null;
   await connectDB();
-  return User.findById(id).lean<IUser>();
+  const user = await User.findById(id).lean<IUser>();
+  // First visit of the day: spend streak freezes on missed days, then reload.
+  if (user && (await settleMissedDays(user, userToday(user)))) return User.findById(id).lean<IUser>();
+  return user;
 });
 
 /** Use in every page and Server Action that needs a signed-in user. */

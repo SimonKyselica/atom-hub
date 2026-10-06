@@ -24,6 +24,11 @@ const habitSchema = z
       .transform((d) => [...new Set(d)].sort()),
     difficulty: z.enum(DIFFICULTY_KEYS),
     palette: z.enum(PALETTES),
+    reminderTime: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Invalid reminder time")
+      .nullable()
+      .catch(null),
   })
   .transform((h) => (h.type === "check" ? { ...h, target: 1, unit: "" } : h));
 

@@ -216,3 +216,37 @@ export function EmojiPicker({ value, onChange, extra = [] }: { value: string; on
     </div>
   );
 }
+
+export function Switch({
+  checked,
+  onChange,
+  label,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  label: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors disabled:opacity-50",
+        checked ? "border-success-btn bg-success-btn" : "border-line bg-line-muted",
+      )}
+    >
+      <span
+        className={cn(
+          "inline-block h-4.5 w-4.5 rounded-full bg-white shadow transition-transform",
+          checked ? "translate-x-[22px]" : "translate-x-[3px]",
+        )}
+      />
+    </button>
+  );
+}

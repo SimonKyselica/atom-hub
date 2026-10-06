@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarCheck, CircleUser, Grid3x3, ListTodo, Store } from "lucide-react";
+import { CalendarCheck, ChartColumn, CircleUser, Grid3x3, ListTodo, Store } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
@@ -8,6 +8,7 @@ import { cn } from "@/lib/cn";
 const ITEMS = [
   { href: "/", label: "Today", icon: CalendarCheck },
   { href: "/habits", label: "Habits", icon: Grid3x3 },
+  { href: "/insights", label: "Insights", icon: ChartColumn, desktopOnly: true },
   { href: "/todos", label: "Todos", icon: ListTodo },
   { href: "/shop", label: "Shop", icon: Store },
   { href: "/profile", label: "Profile", icon: CircleUser },
@@ -57,7 +58,7 @@ export function BottomNav() {
       aria-label="Main"
     >
       <div className="mx-auto grid max-w-lg grid-cols-5">
-        {ITEMS.map(({ href, label, icon: Icon }) => {
+        {ITEMS.filter((item) => !item.desktopOnly).map(({ href, label, icon: Icon }) => {
           const active = isActive(pathname, href);
           return (
             <Link

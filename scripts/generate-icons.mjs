@@ -28,6 +28,20 @@ function svg({ size = 512, rounded = true, scale = 1 }) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 512 512"><rect width="512" height="512" rx="${rounded ? 112 : 0}" fill="#0d1117"/>${cells}</svg>`;
 }
 
+// Android status-bar badge: white on transparent, the OS tints it.
+function badgeSvg() {
+  const cells = [
+    [0, 1, 1, 1],
+    [0, 1, 1, 1],
+    [1, 1, 1, 0],
+    [1, 1, 0, 0],
+  ];
+  const rects = cells.flatMap((row, y) =>
+    row.map((on, x) => (on ? `<rect x="${8 + x * 21}" y="${8 + y * 21}" width="17" height="17" rx="3" fill="#fff"/>` : "")),
+  ).join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">${rects}</svg>`;
+}
+
 mkdirSync("public/icons", { recursive: true });
 const png = (source, size, out) => sharp(Buffer.from(source)).resize(size, size).png().toFile(out);
 
@@ -39,5 +53,6 @@ await Promise.all([
   png(svg({ rounded: false, scale: 0.7 }), 512, "public/icons/maskable-512.png"),
   // iOS rounds the corners itself.
   png(svg({ rounded: false, scale: 0.85 }), 180, "src/app/apple-icon.png"),
+  png(badgeSvg(), 96, "public/icons/badge-96.png"),
 ]);
 console.log("Icons generated.");

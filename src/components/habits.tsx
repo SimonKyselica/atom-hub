@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, ArchiveRestore, ChevronLeft, Flame, Pencil, Percent, Plus, Trash2, Trophy, Check } from "lucide-react";
+import { Archive, ArchiveRestore, ChartColumn, ChevronLeft, Flame, Pencil, Percent, Plus, Trash2, Trophy, Check } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useOptimistic, useState, useTransition } from "react";
@@ -12,6 +12,7 @@ import { DIFFICULTIES, describeSchedule } from "@/lib/game";
 import type { HabitWithData } from "@/lib/types";
 import { HabitFormDialog } from "./habit-form";
 import { HabitGraph, YearPicker, countDoneInRange, lastYearRange, yearRange } from "./graphs";
+import { MasteryIcon, MasteryProgress } from "./mastery";
 import { HabitCheckIn } from "./today-habits";
 import { Box, Button, Chip } from "./ui";
 import { cn } from "@/lib/cn";
@@ -58,11 +59,13 @@ function HabitCard({
   habit,
   today,
   weekStart,
+  frozen,
   onEdit,
 }: {
   habit: HabitWithData;
   today: DateKey;
   weekStart: number;
+  frozen: DateKey[];
   onEdit: () => void;
 }) {
   const range = lastYearRange(today, weekStart);
@@ -77,6 +80,7 @@ function HabitCard({
           <Link href={`/habits/${habit.id}`} className="font-semibold text-accent hover:underline">
             {habit.name}
           </Link>
+          <MasteryIcon total={habit.stats.total} className="ml-1.5" />
           <HabitChips habit={habit} weekStart={weekStart} />
         </div>
         <div className="flex items-center gap-2">
@@ -96,6 +100,7 @@ function HabitCard({
           values={habit.values}
           today={today}
           weekStart={weekStart}
+          frozen={frozen}
           footer={`${done} day${done === 1 ? "" : "s"} completed in the last year`}
         />
       </div>
@@ -108,11 +113,13 @@ export function HabitList({
   archived,
   today,
   weekStart,
+  frozen,
 }: {
   habits: HabitWithData[];
   archived: HabitWithData[];
   today: DateKey;
   weekStart: number;
+  frozen: DateKey[];
 }) {
   const [editing, setEditing] = useState<HabitWithData | null>(null);
   const [creating, setCreating] = useState(false);
@@ -125,9 +132,17 @@ export function HabitList({
           <h1 className="text-xl font-semibold">Habits</h1>
           <p className="text-sm text-muted">Your streaks, one green square at a time.</p>
         </div>
-        <Button variant="primary" onClick={() => setCreating(true)}>
-          <Plus size={16} /> New habit
-        </Button>
+        <div className="flex gap-2">
+          <Link
+            href="/insights"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line bg-subtle px-3 text-sm font-medium hover:bg-line-muted"
+          >
+            <ChartColumn size={16} /> Insights
+          </Link>
+          <Button variant="primary" onClick={() => setCreating(true)}>
+            <Plus size={16} /> New habit
+          </Button>
+        </div>
       </div>
 
       {habits.length === 0 ? (
@@ -139,7 +154,7 @@ export function HabitList({
       ) : (
         <div className="space-y-4">
           {habits.map((h) => (
-            <HabitCard key={h.id} habit={h} today={today} weekStart={weekStart} onEdit={() => setEditing(h)} />
+            <HabitCard key={h.id} habit={h} today={today} weekStart={weekStart} frozen={frozen} onEdit={() => setEditing(h)} />
           ))}
         </div>
       )}
@@ -182,7 +197,17 @@ export function HabitList({
   );
 }
 
-export function HabitDetail({ habit, today, weekStart }: { habit: HabitWithData; today: DateKey; weekStart: number }) {
+export function HabitDetail({
+  habit,
+  today,
+  weekStart,
+  frozen,
+}: {
+  habit: HabitWithData;
+  today: DateKey;
+  weekStart: number;
+  frozen: DateKey[];
+}) {
   const router = useRouter();
   const [year, setYear] = useState<number | null>(null);
   const [selected, setSelected] = useState<DateKey>(today);
@@ -231,6 +256,7 @@ export function HabitDetail({ habit, today, weekStart }: { habit: HabitWithData;
             <div className="min-w-0 flex-1">
               <h1 className="text-xl font-semibold break-words">
                 {habit.name}
+                <MasteryIcon total={habit.stats.total} className="ml-2 text-lg" />
                 {habit.archived && <Chip className="ml-2 align-middle">Archived</Chip>}
               </h1>
               <HabitChips habit={habit} weekStart={weekStart} />
@@ -251,7 +277,10 @@ export function HabitDetail({ habit, today, weekStart }: { habit: HabitWithData;
         </div>
       </div>
 
-      <HabitStatsRow habit={habit} />
+      <div className="space-y-3">
+        <HabitStatsRow habit={habit} />
+        <MasteryProgress total={habit.stats.total} />
+      </div>
 
       <section>
         <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
@@ -270,6 +299,7 @@ export function HabitDetail({ habit, today, weekStart }: { habit: HabitWithData;
             end={range.end}
             selected={selected}
             onSelect={setSelected}
+            frozen={frozen}
             footer="Tap a square to edit that day."
           />
         </Box>

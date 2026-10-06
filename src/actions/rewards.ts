@@ -4,7 +4,8 @@ import { Types } from "mongoose";
 import { refresh } from "next/cache";
 import { z } from "zod";
 import { requireUser, userToday } from "@/lib/dal";
-import { afterRedeem, type ActionError, type GameResult } from "@/lib/engine";
+import { afterRedeem, finish, type ActionError, type GameResult } from "@/lib/engine";
+import { FREEZE } from "@/lib/game";
 import { Reward, Transaction, User, type IReward } from "@/lib/models";
 import type { RewardInput } from "@/lib/types";
 
@@ -70,4 +71,31 @@ export async function redeemReward(id: string): Promise<GameResult | ActionError
   const result = await afterRedeem(user, reward.cost, today);
   refresh();
   return result;
+}
+
+/** Streak freeze: bought like a reward, kept in stock, spent automatically on a missed day. */
+export async function buyFreeze(): Promise<GameResult | ActionError> {
+  const user = await requireUser();
+  const paid = await User.updateOne(
+    { _id: user._id, coins: { $gte: FREEZE.cost }, freezes: { $lt: FREEZE.max } },
+    { $inc: { coins: -FREEZE.cost, freezes: 1 } },
+  );
+  if (!paid.modifiedCount) {
+    return {
+      ok: false,
+      error: (user.freezes ?? 0) >= FREEZE.max ? `You can hold up to ${FREEZE.max} freezes.` : "Not enough coins yet — keep going!",
+    };
+  }
+  await Transaction.create({
+    userId: user._id,
+    kind: "freeze_purchase",
+    refId: "",
+    date: userToday(user),
+    label: "Streak freeze",
+    icon: "❄️",
+    xp: 0,
+    coins: -FREEZE.cost,
+  });
+  refresh();
+  return finish(user._id, user.xp, { xp: 0, coins: -FREEZE.cost }, []);
 }

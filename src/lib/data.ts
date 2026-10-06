@@ -15,6 +15,7 @@ import {
   type ITransaction,
   type IUser,
 } from "./models";
+import { getFrozenDates } from "./engine";
 import { habitStats } from "./streaks";
 import type { ActivityDTO, HabitDTO, HabitWithData, RewardDTO, TodoDTO, ViewerDTO } from "./types";
 import type { AchievementKey } from "./achievements";
@@ -32,6 +33,11 @@ export function toViewer(user: IUser): ViewerDTO {
       key: a.key as AchievementKey,
       unlockedAt: new Date(a.unlockedAt).toISOString(),
     })),
+    freezes: user.freezes ?? 0,
+    todoDigest: { enabled: user.todoDigest?.enabled ?? false, time: user.todoDigest?.time ?? "08:00" },
+    publicSlug: user.publicSlug ?? null,
+    publicEnabled: user.publicEnabled ?? false,
+    publicShowHabits: user.publicShowHabits ?? false,
   };
 }
 
@@ -47,6 +53,7 @@ export function toHabitDTO(h: IHabit): HabitDTO {
     difficulty: h.difficulty,
     palette: h.palette,
     startDate: h.startDate,
+    reminderTime: h.reminderTime ?? null,
     archived: h.archived,
   };
 }
@@ -60,6 +67,8 @@ function toTodoDTO(t: ITodo): TodoDTO {
     difficulty: t.difficulty,
     done: t.done,
     doneDate: t.doneDate,
+    recurrence: t.recurrence ?? null,
+    subtasks: (t.subtasks ?? []).map((s) => ({ id: String(s._id), title: s.title, done: s.done })),
   };
 }
 
@@ -101,10 +110,13 @@ export async function getHabits(
   const habits = await Habit.find(filter).sort({ archived: 1, order: 1, createdAt: 1 }).lean<IHabit[]>();
   if (!habits.length) return [];
 
-  const logs = await HabitLog.find(
-    { userId, habitId: { $in: habits.map((h) => h._id) } },
-    { habitId: 1, date: 1, value: 1, done: 1 },
-  ).lean<IHabitLog[]>();
+  const [logs, frozen] = await Promise.all([
+    HabitLog.find(
+      { userId, habitId: { $in: habits.map((h) => h._id) } },
+      { habitId: 1, date: 1, value: 1, done: 1 },
+    ).lean<IHabitLog[]>(),
+    getFrozenDates(userId),
+  ]);
 
   const byHabit = new Map<string, IHabitLog[]>();
   for (const log of logs) {
@@ -118,7 +130,7 @@ export async function getHabits(
     const done = new Set(habitLogs.filter((l) => l.done).map((l) => l.date));
     const values: Record<DateKey, number> = {};
     for (const l of habitLogs) values[l.date] = l.value;
-    return { ...toHabitDTO(h), stats: habitStats(h, done, today), values };
+    return { ...toHabitDTO(h), stats: habitStats(h, done, today, frozen), values };
   });
 }
 
@@ -147,7 +159,10 @@ export async function getRewards(userId: Types.ObjectId) {
   await connectDB();
   const [rewards, history] = await Promise.all([
     Reward.find({ userId }).sort({ cost: 1 }).lean<IReward[]>(),
-    Transaction.find({ userId, kind: "reward" }).sort({ createdAt: -1 }).limit(20).lean<ITransaction[]>(),
+    Transaction.find({ userId, kind: { $in: ["reward", "freeze_purchase"] } })
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .lean<ITransaction[]>(),
   ]);
   return { rewards: rewards.map(toRewardDTO), history: history.map(toActivityDTO) };
 }
@@ -173,4 +188,18 @@ export async function getProfileCounts(userId: Types.ObjectId) {
     rewardsRedeemed: counts.reward ?? 0,
     activeHabits: habits,
   };
+}
+
+export async function getFrozen(userId: Types.ObjectId): Promise<DateKey[]> {
+  await connectDB();
+  return [...(await getFrozenDates(userId))];
+}
+
+/** Freezes spent in the last couple of days, for the "a freeze saved you" banner. */
+export async function getRecentFreezes(userId: Types.ObjectId, today: DateKey): Promise<DateKey[]> {
+  await connectDB();
+  const rows = await Transaction.find({ userId, kind: "freeze_used", date: { $gte: addDays(today, -2) } }, { date: 1 })
+    .sort({ date: 1 })
+    .lean();
+  return rows.map((r) => r.date);
 }

@@ -8,12 +8,21 @@ function earliestOf(habit: ScheduleLike, done: Set<DateKey>) {
   return earliest;
 }
 
+const NO_FROZEN: ReadonlySet<DateKey> = new Set();
+
 /**
  * Consecutive completions ending at `asOf`. Unscheduled days never break a streak
- * (and count if you did the habit anyway). With `pendingOk`, an unfinished `asOf`
- * (i.e. today, still in progress) doesn't break it either.
+ * (and count if you did the habit anyway); neither do frozen days (they bridge but
+ * don't count). With `pendingOk`, an unfinished `asOf` (today, still in progress)
+ * doesn't break it either.
  */
-export function streakAt(habit: ScheduleLike, done: Set<DateKey>, asOf: DateKey, pendingOk = false): number {
+export function streakAt(
+  habit: ScheduleLike,
+  done: Set<DateKey>,
+  asOf: DateKey,
+  pendingOk = false,
+  frozen: ReadonlySet<DateKey> = NO_FROZEN,
+): number {
   const days = new Set(habit.days);
   const earliest = earliestOf(habit, done);
   let d = asOf;
@@ -21,7 +30,7 @@ export function streakAt(habit: ScheduleLike, done: Set<DateKey>, asOf: DateKey,
   let streak = 0;
   while (d >= earliest) {
     if (done.has(d)) streak++;
-    else if (days.has(dayOfWeek(d))) break;
+    else if (days.has(dayOfWeek(d)) && !frozen.has(d)) break;
     d = addDays(d, -1);
   }
   return streak;
@@ -29,7 +38,12 @@ export function streakAt(habit: ScheduleLike, done: Set<DateKey>, asOf: DateKey,
 
 export type HabitStats = { current: number; longest: number; total: number; rate: number | null };
 
-export function habitStats(habit: ScheduleLike, done: Set<DateKey>, today: DateKey): HabitStats {
+export function habitStats(
+  habit: ScheduleLike,
+  done: Set<DateKey>,
+  today: DateKey,
+  frozen: ReadonlySet<DateKey> = NO_FROZEN,
+): HabitStats {
   const days = new Set(habit.days);
   const earliest = earliestOf(habit, done);
   let longest = 0;
@@ -40,6 +54,8 @@ export function habitStats(habit: ScheduleLike, done: Set<DateKey>, today: DateK
     const isDone = done.has(d);
     const isScheduled = days.has(dayOfWeek(d));
     const isPendingToday = d === today && !isDone;
+    const isFrozen = !isDone && frozen.has(d);
+    if (isFrozen) continue; // protected: neither counts nor breaks
     if (isScheduled && !isPendingToday) {
       scheduled++;
       if (isDone) scheduledDone++;
@@ -48,33 +64,32 @@ export function habitStats(habit: ScheduleLike, done: Set<DateKey>, today: DateK
     else if (isScheduled && !isPendingToday) run = 0;
   }
   return {
-    current: streakAt(habit, done, today, true),
+    current: streakAt(habit, done, today, true, frozen),
     longest,
     total: [...done].filter((d) => d <= today).length,
     rate: scheduled ? Math.round((scheduledDone / scheduled) * 100) : null,
   };
 }
 
-/** Consecutive calendar days present in `dates`, ending today (or yesterday if today is still empty). */
-export function dayStreak(dates: Set<DateKey>, today: DateKey): number {
+/** Consecutive calendar days present in `dates`, ending today (or yesterday if today is still empty). Frozen days bridge. */
+export function dayStreak(dates: Set<DateKey>, today: DateKey, frozen: ReadonlySet<DateKey> = NO_FROZEN): number {
   let d = dates.has(today) ? today : addDays(today, -1);
   let streak = 0;
-  while (dates.has(d)) {
-    streak++;
+  while (dates.has(d) || frozen.has(d)) {
+    if (dates.has(d)) streak++;
     d = addDays(d, -1);
   }
   return streak;
 }
 
-export function longestDayStreak(dates: Set<DateKey>): number {
+export function longestDayStreak(dates: Set<DateKey>, frozen: ReadonlySet<DateKey> = NO_FROZEN): number {
+  if (!dates.size) return 0;
   const sorted = [...dates].sort();
   let best = 0;
   let run = 0;
-  let prev: DateKey | null = null;
-  for (const d of sorted) {
-    run = prev && addDays(prev, 1) === d ? run + 1 : 1;
-    best = Math.max(best, run);
-    prev = d;
+  for (let d = sorted[0]; d <= sorted[sorted.length - 1]; d = addDays(d, 1)) {
+    if (dates.has(d)) best = Math.max(best, ++run);
+    else if (!frozen.has(d)) run = 0;
   }
   return best;
 }

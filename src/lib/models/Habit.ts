@@ -13,6 +13,8 @@ export interface IHabit {
   difficulty: Difficulty;
   palette: Palette;
   startDate: string;
+  /** "HH:MM" local time for a push reminder, or null. */
+  reminderTime: string | null;
   archived: boolean;
   order: number;
   createdAt: Date;
@@ -31,6 +33,7 @@ const HabitSchema = new Schema<IHabit>(
     difficulty: { type: String, enum: DIFFICULTY_KEYS, default: "medium" },
     palette: { type: String, enum: PALETTES, default: "green" },
     startDate: { type: String, required: true },
+    reminderTime: { type: String, default: null },
     archived: { type: Boolean, default: false },
     order: { type: Number, default: 0 },
   },

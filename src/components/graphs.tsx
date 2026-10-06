@@ -45,15 +45,18 @@ export function OverallGraph({
   weekStart,
   years = [],
   footer,
+  frozen = [],
 }: {
   counts: Record<DateKey, number>;
   today: DateKey;
   weekStart: number;
   years?: number[];
   footer?: ReactNode;
+  frozen?: DateKey[];
 }) {
   const [year, setYear] = useState<number | null>(null);
   const { start, end } = year === null ? lastYearRange(today, weekStart) : yearRange(year, today);
+  const frozenSet = useMemo(() => new Set(frozen), [frozen]);
 
   const { total, max } = useMemo(() => {
     let total = 0;
@@ -70,12 +73,16 @@ export function OverallGraph({
     (date: DateKey): CellInfo => {
       const n = counts[date] ?? 0;
       const day = formatGithubDay(date);
+      const isFrozen = frozenSet.has(date);
       return {
         level: countLevel(n, max),
-        label: n ? `${n} contribution${n === 1 ? "" : "s"} on ${day}.` : `No contributions on ${day}.`,
+        frozen: isFrozen && !n,
+        label:
+          (n ? `${n} contribution${n === 1 ? "" : "s"} on ${day}.` : `No contributions on ${day}.`) +
+          (isFrozen ? " ❄️ Streak freeze used." : ""),
       };
     },
-    [counts, max],
+    [counts, max, frozenSet],
   );
 
   return (
@@ -93,6 +100,7 @@ export function OverallGraph({
           weekStart={weekStart}
           getCell={getCell}
           footer={footer ?? "Every completed habit or todo is one contribution."}
+          frozenLegend={hasFrozenIn(frozen, start, end)}
         />
       </Box>
     </section>
@@ -101,11 +109,23 @@ export function OverallGraph({
 
 type HabitGraphHabit = Pick<HabitDTO, "type" | "target" | "unit" | "days" | "startDate" | "palette">;
 
-export function habitCell(habit: HabitGraphHabit, values: Record<DateKey, number>, today: DateKey) {
+function hasFrozenIn(frozen: DateKey[], start: DateKey, end: DateKey) {
+  return frozen.some((d) => d >= start && d <= end);
+}
+
+export function habitCell(
+  habit: HabitGraphHabit,
+  values: Record<DateKey, number>,
+  today: DateKey,
+  frozen: ReadonlySet<DateKey> = new Set(),
+) {
   return (date: DateKey): CellInfo => {
     const v = values[date] ?? 0;
     const scheduled = habit.days.includes(dayOfWeek(date));
     const day = formatGithubDay(date);
+    if (!v && scheduled && frozen.has(date) && date >= habit.startDate) {
+      return { level: 0, frozen: true, label: `❄️ Streak freeze used · ${day}` };
+    }
     let label: string;
     if (habit.type === "count") {
       label = `${v}/${habit.target}${habit.unit ? ` ${habit.unit}` : ""} on ${day}${v >= habit.target ? " ✓" : ""}`;
@@ -142,7 +162,9 @@ export function HabitGraph({
   selected,
   onSelect,
   footer,
+  frozen = [],
 }: {
+  frozen?: DateKey[];
   habit: HabitGraphHabit;
   values: Record<DateKey, number>;
   today: DateKey;
@@ -154,9 +176,10 @@ export function HabitGraph({
   footer?: ReactNode;
 }) {
   const range = lastYearRange(today, weekStart);
-  const getCell = useMemo(() => habitCell(habit, values, today), [habit, values, today]);
+  const getCell = useMemo(() => habitCell(habit, values, today, new Set(frozen)), [habit, values, today, frozen]);
   return (
     <ContributionGraph
+      frozenLegend={hasFrozenIn(frozen, start ?? range.start, end ?? range.end)}
       start={start ?? range.start}
       end={end ?? range.end}
       weekStart={weekStart}

@@ -19,7 +19,10 @@ export type AchievementKey =
   | "level_10"
   | "level_20"
   | "first_reward"
-  | "habits_5";
+  | "habits_5"
+  | "quests_10"
+  | "mastery_gold"
+  | "freeze_saved";
 
 export type Achievement = {
   key: AchievementKey;
@@ -49,6 +52,9 @@ export const ACHIEVEMENTS: Achievement[] = [
   { key: "level_20", name: "Legend", description: "Reach level 20", icon: "👑", coins: 400 },
   { key: "first_reward", name: "Treat Yourself", description: "Redeem your first reward", icon: "🎁", coins: 0 },
   { key: "habits_5", name: "Architect", description: "Create 5 habits", icon: "🏗️", coins: 20 },
+  { key: "quests_10", name: "Adventurer", description: "Complete 10 daily quests", icon: "🗺️", coins: 50 },
+  { key: "mastery_gold", name: "Golden Habit", description: "Reach Gold mastery on a habit", icon: "🥇", coins: 100 },
+  { key: "freeze_saved", name: "Ice Cold", description: "Let a streak freeze save your streak", icon: "🧊", coins: 10 },
 ];
 
 export const ACHIEVEMENT_MAP = Object.fromEntries(ACHIEVEMENTS.map((a) => [a.key, a])) as Record<

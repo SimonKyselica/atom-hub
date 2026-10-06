@@ -1,6 +1,17 @@
 import { Schema, model, models, type Model, type Types } from "mongoose";
 
-export type TransactionKind = "habit" | "todo" | "perfect_day" | "achievement" | "reward";
+export const TRANSACTION_KINDS = [
+  "habit",
+  "todo",
+  "perfect_day",
+  "achievement",
+  "reward",
+  "freeze_purchase",
+  "freeze_used",
+  "quest",
+  "mastery",
+] as const;
+export type TransactionKind = (typeof TRANSACTION_KINDS)[number];
 
 /**
  * The XP/coin ledger. Habit and todo entries are also the "contributions" that
@@ -24,7 +35,7 @@ export interface ITransaction {
 const TransactionSchema = new Schema<ITransaction>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    kind: { type: String, enum: ["habit", "todo", "perfect_day", "achievement", "reward"], required: true },
+    kind: { type: String, enum: TRANSACTION_KINDS, required: true },
     refId: { type: String, default: "" },
     date: { type: String, required: true },
     label: { type: String, default: "" },

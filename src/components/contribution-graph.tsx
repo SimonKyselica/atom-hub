@@ -5,7 +5,7 @@ import { addDays, diffDays, formatKey, parseKey, startOfWeek, type DateKey } fro
 import { WEEKDAYS_SHORT, type Palette } from "@/lib/game";
 import { cn } from "@/lib/cn";
 
-export type CellInfo = { level: 0 | 1 | 2 | 3 | 4; label: string; muted?: boolean };
+export type CellInfo = { level: 0 | 1 | 2 | 3 | 4; label: string; muted?: boolean; frozen?: boolean };
 
 type Props = {
   start: DateKey;
@@ -18,6 +18,8 @@ type Props = {
   /** Left side of the legend row (GitHub's "Learn how we count contributions"). */
   footer?: ReactNode;
   legend?: { less: string; more: string; levels: CellInfo["level"][] };
+  /** Adds a "Frozen" swatch to the legend. */
+  frozenLegend?: boolean;
   className?: string;
 };
 
@@ -33,6 +35,7 @@ export function ContributionGraph({
   onSelect,
   footer,
   legend = { less: "Less", more: "More", levels: [0, 1, 2, 3, 4] },
+  frozenLegend = false,
   className,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -132,6 +135,7 @@ export function ContributionGraph({
                 data-date={date}
                 data-level={info.level}
                 data-muted={info.muted || undefined}
+                data-frozen={info.frozen || undefined}
                 data-selected={selected === date || undefined}
                 aria-label={info.label}
                 className={cn("cell aspect-square w-full", onSelect && "cursor-pointer")}
@@ -155,6 +159,11 @@ export function ContributionGraph({
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
         <div>{footer}</div>
         <div className="flex items-center gap-[3px]">
+          {frozenLegend && (
+            <span className="mr-3 flex items-center gap-1">
+              <span data-frozen="true" className="cell inline-block h-[10px] w-[10px]" /> Frozen
+            </span>
+          )}
           <span className="mr-1">{legend.less}</span>
           {legend.levels.map((l) => (
             <span key={l} data-level={l} className="cell inline-block h-[10px] w-[10px]" />

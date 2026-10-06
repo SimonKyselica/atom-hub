@@ -1,10 +1,11 @@
 "use client";
 
-import { CircleCheck, CircleDot, Pencil, Plus, Trash2 } from "lucide-react";
+import { CircleCheck, CircleDot, Pencil, Plus, Repeat, Trash2, X } from "lucide-react";
 import Link from "next/link";
-import { useOptimistic, useState, useTransition } from "react";
+import { startTransition as startSubtaskTransition, useOptimistic, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { clearCompletedTodos, createTodo, deleteTodo, toggleTodo, updateTodo } from "@/actions/todos";
+import { clearCompletedTodos, createTodo, deleteTodo, toggleSubtask, toggleTodo, updateTodo } from "@/actions/todos";
+import { RECURRENCES, RECURRENCE_LABEL, type Recurrence } from "@/lib/recurrence";
 import { addDays, formatRelativeDue, type DateKey } from "@/lib/dates";
 import { celebrate, run } from "@/lib/feedback";
 import { DIFFICULTIES, DIFFICULTY_KEYS, type Difficulty } from "@/lib/game";
@@ -17,8 +18,19 @@ import { cn } from "@/lib/cn";
 export function TodoItem({ todo, today, onEdit }: { todo: TodoDTO; today: DateKey; onEdit?: (t: TodoDTO) => void }) {
   const [pending, startTransition] = useTransition();
   const [done, setDone] = useOptimistic(todo.done);
+  const [subtasks, setSubtask] = useOptimistic(todo.subtasks, (state, { id, done }: { id: string; done: boolean }) =>
+    state.map((s) => (s.id === id ? { ...s, done } : s)),
+  );
   const overdue = !done && todo.dueDate !== null && todo.dueDate < today;
   const dueToday = !done && todo.dueDate === today;
+  const subtasksDone = subtasks.filter((s) => s.done).length;
+
+  function toggleSub(id: string, next: boolean) {
+    startSubtaskTransition(async () => {
+      setSubtask({ id, done: next });
+      await run(toggleSubtask(todo.id, id, next));
+    });
+  }
 
   function toggle() {
     startTransition(async () => {
@@ -54,7 +66,24 @@ export function TodoItem({ todo, today, onEdit }: { todo: TodoDTO; today: DateKe
           {todo.title}
         </p>
         {todo.notes && <p className="mt-0.5 line-clamp-2 text-sm text-muted">{todo.notes}</p>}
-        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+        {subtasks.length > 0 && !done && (
+          <ul className="mt-2 space-y-1">
+            {subtasks.map((s) => (
+              <li key={s.id}>
+                <label className="flex cursor-pointer items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={s.done}
+                    onChange={() => toggleSub(s.id, !s.done)}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--success)]"
+                  />
+                  <span className={cn("break-words", s.done && "text-muted line-through")}>{s.title}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           {done && todo.doneDate ? (
             <span className="text-xs text-muted">Closed {formatRelativeDue(todo.doneDate, today).toLowerCase()}</span>
           ) : (
@@ -69,6 +98,16 @@ export function TodoItem({ todo, today, onEdit }: { todo: TodoDTO; today: DateKe
                 {formatRelativeDue(todo.dueDate, today)}
               </Chip>
             )
+          )}
+          {todo.recurrence && (
+            <Chip title="Repeats — completing it schedules the next one">
+              <Repeat size={11} /> {RECURRENCE_LABEL[todo.recurrence]}
+            </Chip>
+          )}
+          {subtasks.length > 0 && (
+            <Chip className={cn(subtasksDone === subtasks.length && "border-success/40 text-success")}>
+              ☑ {subtasksDone}/{subtasks.length}
+            </Chip>
           )}
           {!done && (
             <Chip>
@@ -129,10 +168,32 @@ function DuePicker({ value, onChange, today }: { value: DateKey | null; onChange
 function TodoForm({ todo, today, onDone }: { todo?: TodoDTO; today: DateKey; onDone: () => void }) {
   const [form, setForm] = useState<TodoInput>(
     todo
-      ? { title: todo.title, notes: todo.notes, dueDate: todo.dueDate, difficulty: todo.difficulty }
-      : { title: "", notes: "", dueDate: null, difficulty: "easy" },
+      ? {
+          title: todo.title,
+          notes: todo.notes,
+          dueDate: todo.dueDate,
+          difficulty: todo.difficulty,
+          recurrence: todo.recurrence,
+          subtasks: todo.subtasks.map((s) => ({ id: s.id, title: s.title, done: s.done })),
+        }
+      : { title: "", notes: "", dueDate: null, difficulty: "easy", recurrence: null, subtasks: [] },
   );
+  const [newSubtask, setNewSubtask] = useState("");
   const [pending, startTransition] = useTransition();
+  const subtasks = form.subtasks ?? [];
+  const setSubtasks = (next: typeof subtasks) => setForm({ ...form, subtasks: next });
+
+  function addSubtask() {
+    const title = newSubtask.trim();
+    if (!title) return;
+    setSubtasks([...subtasks, { title, done: false }]);
+    setNewSubtask("");
+  }
+
+  function setRepeat(recurrence: Recurrence | null) {
+    // Repeating needs an anchor date; default to today.
+    setForm({ ...form, recurrence, dueDate: recurrence && !form.dueDate ? today : form.dueDate });
+  }
 
   return (
     <form
@@ -140,7 +201,8 @@ function TodoForm({ todo, today, onDone }: { todo?: TodoDTO; today: DateKey; onD
       onSubmit={(e) => {
         e.preventDefault();
         startTransition(async () => {
-          const res = await run(todo ? updateTodo(todo.id, form) : createTodo(form));
+          const payload = { ...form, subtasks: subtasks.filter((s) => s.title.trim()) };
+          const res = await run(todo ? updateTodo(todo.id, payload) : createTodo(payload));
           if (res) onDone();
         });
       }}
@@ -160,6 +222,79 @@ function TodoForm({ todo, today, onDone }: { todo?: TodoDTO; today: DateKey; onD
       <div>
         <span className="mb-1.5 block text-sm font-semibold">Due</span>
         <DuePicker value={form.dueDate} onChange={(dueDate) => setForm({ ...form, dueDate })} today={today} />
+      </div>
+      <div>
+        <span className="mb-1.5 block text-sm font-semibold">Repeat</span>
+        <div className="flex flex-wrap gap-1.5">
+          {[null, ...RECURRENCES].map((r) => (
+            <button
+              key={r ?? "none"}
+              type="button"
+              aria-pressed={form.recurrence === r}
+              onClick={() => setRepeat(r)}
+              className={cn(
+                "rounded-md border px-3 py-1 text-sm font-medium transition-colors",
+                form.recurrence === r ? "border-accent bg-accent-muted text-accent" : "border-line bg-subtle text-muted hover:text-fg",
+              )}
+            >
+              {r ? RECURRENCE_LABEL[r] : "Never"}
+            </button>
+          ))}
+        </div>
+        {form.recurrence && (
+          <p className="mt-1.5 text-xs text-muted">Completing it schedules the next one from its due date.</p>
+        )}
+      </div>
+      <div>
+        <span className="mb-1.5 block text-sm font-semibold">Subtasks</span>
+        {subtasks.length > 0 && (
+          <ul className="mb-2 space-y-1.5">
+            {subtasks.map((s, i) => (
+              <li key={s.id ?? `new-${i}`} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={s.done}
+                  onChange={() => setSubtasks(subtasks.map((x, j) => (j === i ? { ...x, done: !x.done } : x)))}
+                  className="h-4 w-4 shrink-0 accent-[var(--success)]"
+                  aria-label={`Done: ${s.title}`}
+                />
+                <Input
+                  value={s.title}
+                  onChange={(e) => setSubtasks(subtasks.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))}
+                  maxLength={200}
+                  className="h-8"
+                />
+                <Button
+                  variant="invisible"
+                  size="sm"
+                  className="h-8 w-8 px-0"
+                  onClick={() => setSubtasks(subtasks.filter((_, j) => j !== i))}
+                  aria-label="Remove subtask"
+                >
+                  <X size={14} />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex gap-2">
+          <Input
+            value={newSubtask}
+            onChange={(e) => setNewSubtask(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addSubtask();
+              }
+            }}
+            placeholder="Add a step…"
+            maxLength={200}
+            className="h-8"
+          />
+          <Button size="sm" className="h-8" onClick={addSubtask} disabled={!newSubtask.trim()}>
+            <Plus size={14} /> Add
+          </Button>
+        </div>
       </div>
       <div>
         <span className="mb-1.5 block text-sm font-semibold">Difficulty</span>

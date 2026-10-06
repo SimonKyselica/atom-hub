@@ -26,6 +26,7 @@ const EMPTY: HabitInput = {
   days: ALL_DAYS,
   difficulty: "medium",
   palette: "green",
+  reminderTime: null,
 };
 
 export const HABIT_SUGGESTIONS: HabitInput[] = [
@@ -47,6 +48,7 @@ function toInput(h: HabitDTO): HabitInput {
     days: h.days,
     difficulty: h.difficulty,
     palette: h.palette,
+    reminderTime: h.reminderTime,
   };
 }
 
@@ -193,6 +195,29 @@ function HabitForm({ habit, weekStart, onDone }: { habit?: HabitDTO; weekStart: 
         <p className="mt-1.5 text-xs text-muted">
           Each completion earns <b className="text-done">+{reward.xp} XP</b> and{" "}
           <b className="text-coin">+{reward.coins} coins</b> — up to 50% more on long streaks.
+        </p>
+      </div>
+
+      <div>
+        <span className="mb-1.5 block text-sm font-semibold">Reminder</span>
+        <div className="flex items-center gap-2">
+          <Input
+            type="time"
+            className="w-36"
+            value={form.reminderTime ?? ""}
+            onChange={(e) => set("reminderTime", e.target.value || null)}
+            aria-label="Reminder time"
+          />
+          {form.reminderTime ? (
+            <Button size="sm" variant="invisible" onClick={() => set("reminderTime", null)}>
+              No reminder
+            </Button>
+          ) : (
+            <span className="text-xs text-muted">Optional</span>
+          )}
+        </div>
+        <p className="mt-1.5 text-xs text-muted">
+          A push notification on scheduled days if it isn&apos;t done yet. Enable notifications in Profile.
         </p>
       </div>
 

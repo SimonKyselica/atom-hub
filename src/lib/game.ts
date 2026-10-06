@@ -91,3 +91,27 @@ export function describeSchedule(days: number[], weekStart = 0): string {
   const ordered = [...ALL_DAYS.slice(weekStart), ...ALL_DAYS.slice(0, weekStart)];
   return ordered.filter((d) => set.has(d)).map((d) => WEEKDAYS_SHORT[d]).join(", ");
 }
+
+// Streak freezes: bought in the shop, used automatically on a missed day.
+export const FREEZE = { cost: 100, max: 2 } as const;
+
+// Habit mastery: 21 days to start a habit, ~66 to make it automatic (Lally et al., 2010).
+export const MASTERY = [
+  { key: "bronze", name: "Bronze", at: 21, icon: "🥉", coins: 25 },
+  { key: "silver", name: "Silver", at: 66, icon: "🥈", coins: 75 },
+  { key: "gold", name: "Gold", at: 100, icon: "🥇", coins: 150 },
+  { key: "diamond", name: "Diamond", at: 365, icon: "💎", coins: 500 },
+] as const;
+
+export type MasteryTier = (typeof MASTERY)[number];
+
+export function masteryFor(total: number) {
+  const current = [...MASTERY].reverse().find((t) => total >= t.at) ?? null;
+  const next = MASTERY.find((t) => total < t.at) ?? null;
+  const from = current?.at ?? 0;
+  return {
+    current,
+    next,
+    percent: next ? Math.round(((total - from) / (next.at - from)) * 100) : 100,
+  };
+}

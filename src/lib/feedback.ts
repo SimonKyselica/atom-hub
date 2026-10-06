@@ -49,6 +49,20 @@ export function celebrate(result: GameResult, { quiet = false } = {}) {
     celebrated = true;
   }
 
+  if (result.mastery) {
+    const { habit, emoji, tier } = result.mastery;
+    toast.success(`${emoji} ${habit} reached ${tier.name} mastery!`, {
+      description: `+${tier.coins} coins · keep going for the next tier`,
+      icon: tier.icon,
+    });
+    if (!celebrated) burst(true);
+    celebrated = true;
+  }
+
+  if (result.freezeRefunded) {
+    toast("Streak freeze refunded", { description: "That day is complete now, so your freeze is back.", icon: "❄️" });
+  }
+
   if (result.perfectDay === "gained") {
     toast.success("Perfect day!", {
       description: `Every habit done · ${formatDelta(PERFECT_DAY_BONUS.xp, PERFECT_DAY_BONUS.coins)} bonus`,

@@ -10,6 +10,7 @@ import { celebrate, run } from "@/lib/feedback";
 import { habitReward } from "@/lib/game";
 import type { GameResult, HabitWithData } from "@/lib/types";
 import { HABIT_SUGGESTIONS, HabitFormDialog } from "./habit-form";
+import { MasteryIcon } from "./mastery";
 import { Box, Button, ProgressBar } from "./ui";
 import { cn } from "@/lib/cn";
 
@@ -71,6 +72,7 @@ export function HabitCheckIn({
           className={cn("block truncate font-semibold hover:text-accent hover:underline", done && "text-muted")}
         >
           {habit.name}
+          <MasteryIcon total={habit.stats.total} className="ml-1.5 text-sm" />
         </Link>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 text-xs text-muted">
           {showStreak && streak > 0 && (

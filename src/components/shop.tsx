@@ -3,10 +3,10 @@
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { createReward, deleteReward, redeemReward, updateReward } from "@/actions/rewards";
+import { buyFreeze, createReward, deleteReward, redeemReward, updateReward } from "@/actions/rewards";
 import { formatRelativeDue, type DateKey } from "@/lib/dates";
 import { celebrate, run } from "@/lib/feedback";
-import { DIFFICULTIES, PERFECT_DAY_BONUS } from "@/lib/game";
+import { DIFFICULTIES, FREEZE, PERFECT_DAY_BONUS } from "@/lib/game";
 import type { ActivityDTO, GameResult, RewardDTO, RewardInput } from "@/lib/types";
 import { CoinAmount } from "./level-badge";
 import { Box, Button, Dialog, EmojiPicker, Field, Input, ProgressBar } from "./ui";
@@ -75,6 +75,63 @@ function RewardCard({ reward, coins, onEdit }: { reward: RewardDTO; coins: numbe
   );
 }
 
+function useTwoTap() {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 3000);
+    return () => clearTimeout(t);
+  }, [armed]);
+  return [armed, setArmed] as const;
+}
+
+/** The one built-in item: protects every streak for one missed day, applied automatically. */
+function FreezeCard({ coins, freezes }: { coins: number; freezes: number }) {
+  const [armed, setArmed] = useTwoTap();
+  const [pending, startTransition] = useTransition();
+  const full = freezes >= FREEZE.max;
+  const affordable = coins >= FREEZE.cost;
+
+  function buy() {
+    if (!armed) return setArmed(true);
+    setArmed(false);
+    startTransition(async () => {
+      const res = await run<GameResult>(buyFreeze());
+      if (res) toast.success("Streak freeze stocked", { icon: "❄️", description: "It kicks in automatically if you miss a day." });
+    });
+  }
+
+  return (
+    <Box className="flex flex-col gap-3 border-accent/40 bg-accent-muted p-4 sm:flex-row sm:items-center">
+      <span className="text-4xl leading-none">❄️</span>
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold">Streak freeze</p>
+        <p className="text-sm text-muted">
+          Miss a day and a freeze is used automatically — every streak survives. Hold up to {FREEZE.max}.
+        </p>
+        <p className="mt-1 text-sm">
+          In stock:{" "}
+          {Array.from({ length: FREEZE.max }, (_, i) => (
+            <span key={i} className={i < freezes ? "" : "opacity-25 grayscale"}>
+              ❄️
+            </span>
+          ))}
+        </p>
+      </div>
+      <div className="flex items-center gap-3 sm:flex-col sm:items-end">
+        <CoinAmount coins={FREEZE.cost} />
+        <Button
+          variant={armed ? "danger" : "primary"}
+          disabled={full || !affordable || pending}
+          onClick={buy}
+        >
+          {full ? "Fully stocked" : pending ? "…" : armed ? "Tap to confirm" : "Buy freeze"}
+        </Button>
+      </div>
+    </Box>
+  );
+}
+
 function RewardForm({ reward, onDone }: { reward?: RewardDTO; onDone: () => void }) {
   const [form, setForm] = useState<RewardInput>(
     reward ? { name: reward.name, emoji: reward.emoji, cost: reward.cost } : { name: "", emoji: "🎁", cost: 50 },
@@ -129,11 +186,13 @@ export function Shop({
   rewards,
   history,
   coins,
+  freezes,
   today,
 }: {
   rewards: RewardDTO[];
   history: ActivityDTO[];
   coins: number;
+  freezes: number;
   today: DateKey;
 }) {
   const [editing, setEditing] = useState<RewardDTO | null>(null);
@@ -153,6 +212,8 @@ export function Shop({
           {PERFECT_DAY_BONUS.coins}) and achievements.
         </p>
       </Box>
+
+      <FreezeCard coins={coins} freezes={freezes} />
 
       <section>
         <div className="mb-3 flex items-center justify-between">

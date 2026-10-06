@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, sessionCookieOptions, signSession, verifySession } from "@/lib/session-token";
 
-const PUBLIC_PATHS = ["/login", "/signup", "/offline", "/logout"];
+// /api routes authenticate themselves (JSON 401s, cron secret); /u/<slug> are public profiles.
+const PUBLIC_PATHS = ["/login", "/signup", "/offline", "/logout", "/api", "/u"];
 const REFRESH_AFTER_SECONDS = 60 * 60 * 24; // roll the session cookie at most once a day
 
 // Optimistic check only — every page and Server Action re-verifies via requireUser().

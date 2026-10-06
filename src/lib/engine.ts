@@ -2,7 +2,7 @@ import "server-only";
 import type { Types } from "mongoose";
 import { ACHIEVEMENTS, type Achievement } from "./achievements";
 import { addDays, dayOfWeek, type DateKey } from "./dates";
-import { PERFECT_DAY_BONUS, habitReward, levelFromXp, todoReward, type Difficulty } from "./game";
+import { MASTERY, PERFECT_DAY_BONUS, habitReward, levelFromXp, todoReward, type Difficulty } from "./game";
 import { Habit, HabitLog, Transaction, User, type IHabit, type ITransaction, type TransactionKind } from "./models";
 import { habitStats, streakAt } from "./streaks";
 import type { GameResult } from "./types";
@@ -28,7 +28,7 @@ function isDuplicateKey(err: unknown) {
 }
 
 /** Record an award once. Returns what was actually applied (zero if it already existed). */
-async function grant(userId: Types.ObjectId, entry: Entry): Promise<Delta> {
+export async function grant(userId: Types.ObjectId, entry: Entry): Promise<Delta> {
   await Transaction.init(); // make sure the unique dedupeKey index exists
   try {
     await Transaction.create({ userId, ...entry });
@@ -41,7 +41,7 @@ async function grant(userId: Types.ObjectId, entry: Entry): Promise<Delta> {
 }
 
 /** Undo an award if it exists. Coins may go negative if they were already spent — no free rewards. */
-async function revoke(userId: Types.ObjectId, dedupeKey: string): Promise<Delta> {
+export async function revoke(userId: Types.ObjectId, dedupeKey: string): Promise<Delta> {
   const t = await Transaction.findOneAndDelete({ userId, dedupeKey }).lean<ITransaction>();
   if (!t) return ZERO;
   await User.updateOne({ _id: userId }, { $inc: { xp: -t.xp, coins: -t.coins } });
@@ -75,7 +75,7 @@ async function syncPerfectDay(userId: Types.ObjectId, date: DateKey) {
   return { delta, status: delta.xp ? ("lost" as const) : null };
 }
 
-type Hints = { date: DateKey; longestStreak?: number };
+type Hints = { date: DateKey; longestStreak?: number; habitTotal?: number };
 
 export async function checkAchievements(userId: Types.ObjectId, hints: Hints): Promise<Achievement[]> {
   const user = await User.findById(userId, { achievements: 1, xp: 1 }).lean();
@@ -119,6 +119,9 @@ export async function checkAchievements(userId: Types.ObjectId, hints: Hints): P
     level_20: () => level >= 20,
     first_reward: async () => (await count("reward")) >= 1,
     habits_5: async () => (await lazy("habits", () => Habit.countDocuments({ userId }).exec())) >= 5,
+    quests_10: async () => (await count("quest")) >= 10,
+    mastery_gold: () => (hints.habitTotal ?? 0) >= 100,
+    freeze_saved: async () => (await count("freeze_used")) >= 1,
   };
 
   const unlocked: Achievement[] = [];
@@ -146,7 +149,7 @@ export async function checkAchievements(userId: Types.ObjectId, hints: Hints): P
   return unlocked;
 }
 
-async function finish(
+export async function finish(
   userId: Types.ObjectId,
   xpBefore: number,
   delta: Delta,
@@ -186,16 +189,19 @@ export async function applyHabitValue(
     await HabitLog.deleteOne({ habitId: habit._id, date });
   }
 
-  const doneDates = new Set(
-    (await HabitLog.find({ habitId: habit._id, done: true }, { date: 1 }).lean()).map((l) => l.date),
-  );
+  const [doneDates, frozen] = await Promise.all([
+    HabitLog.find({ habitId: habit._id, done: true }, { date: 1 })
+      .lean()
+      .then((logs) => new Set(logs.map((l) => l.date))),
+    getFrozenDates(user._id),
+  ]);
   const dedupeKey = `habit:${habit._id}:${date}`;
 
   let delta: Delta;
   let streak = 0;
   let multiplier = 1;
   if (done) {
-    streak = streakAt(habit, doneDates, date);
+    streak = streakAt(habit, doneDates, date, false, frozen);
     const reward = habitReward(habit.difficulty, streak);
     multiplier = reward.multiplier;
     delta = await grant(user._id, {
@@ -215,11 +221,69 @@ export async function applyHabitValue(
   const perfect = await syncPerfectDay(user._id, date);
   delta = { xp: delta.xp + perfect.delta.xp, coins: delta.coins + perfect.delta.coins };
 
+  // Mastery tiers pay out once, the first time the habit's total crosses them.
+  let mastery: GameResult["mastery"];
+  if (done) {
+    for (const tier of MASTERY) {
+      if (doneDates.size < tier.at) break;
+      const paid = await grant(user._id, {
+        kind: "mastery",
+        refId: String(habit._id),
+        date,
+        label: `${habit.name} reached ${tier.name}`,
+        icon: tier.icon,
+        xp: 0,
+        coins: tier.coins,
+        dedupeKey: `mastery:${habit._id}:${tier.key}`,
+      });
+      if (paid.coins) {
+        delta = { xp: delta.xp, coins: delta.coins + paid.coins };
+        mastery = { habit: habit.name, emoji: habit.emoji, tier: { name: tier.name, icon: tier.icon, coins: tier.coins } };
+      }
+    }
+  }
+
+  const freezeRefunded = date < today && done ? await refundFreezeIfRepaired(user._id, date) : false;
+
   const achievements = done
-    ? await checkAchievements(user._id, { date, longestStreak: habitStats(habit, doneDates, today).longest })
+    ? await checkAchievements(user._id, {
+        date,
+        longestStreak: habitStats(habit, doneDates, today, frozen).longest,
+        habitTotal: doneDates.size,
+      })
     : [];
 
-  return finish(user._id, user.xp, delta, achievements, { perfectDay: perfect.status, streak, multiplier });
+  return finish(user._id, user.xp, delta, achievements, {
+    perfectDay: perfect.status,
+    streak,
+    multiplier,
+    mastery,
+    freezeRefunded,
+  });
+}
+
+export async function getFrozenDates(userId: Types.ObjectId): Promise<Set<DateKey>> {
+  const dates = await Transaction.distinct("date", { userId, kind: "freeze_used" });
+  return new Set(dates as DateKey[]);
+}
+
+async function missedHabitsOn(userId: Types.ObjectId, date: DateKey) {
+  const habits = await Habit.find({ userId, archived: false, startDate: { $lte: date } }, { days: 1 }).lean<
+    Pick<IHabit, "_id" | "days">[]
+  >();
+  const scheduled = habits.filter((h) => h.days.includes(dayOfWeek(date)));
+  if (!scheduled.length) return 0;
+  const done = await HabitLog.countDocuments({ habitId: { $in: scheduled.map((h) => h._id) }, date, done: true });
+  return scheduled.length - done;
+}
+
+/** Backfilling a frozen day so nothing is missed any more gives the freeze back. */
+async function refundFreezeIfRepaired(userId: Types.ObjectId, date: DateKey) {
+  if ((await missedHabitsOn(userId, date)) > 0) return false;
+  const used = await Transaction.findOneAndDelete({ userId, dedupeKey: `freeze:${userId}:${date}` });
+  if (!used) return false;
+  await User.updateOne({ _id: userId }, { $inc: { freezes: 1 } });
+  return true;
 }
 
 export async function settleTodo(
