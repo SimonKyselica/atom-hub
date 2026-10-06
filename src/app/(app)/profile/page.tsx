@@ -49,7 +49,7 @@ export default async function ProfilePage() {
   ];
 
   return (
-    <div className="grid gap-8 md:grid-cols-[260px_minmax(0,1fr)]">
+    <div className="grid grid-cols-1 gap-8 md:grid-cols-[260px_minmax(0,1fr)]">
       <aside className="space-y-5">
         <div className="flex items-center gap-4 md:block">
           <Identicon seed={viewer.id} size={96} className="ring-1 ring-line md:h-[260px] md:w-[260px]" />

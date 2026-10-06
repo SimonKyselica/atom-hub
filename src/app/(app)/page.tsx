@@ -60,7 +60,7 @@ export default async function TodayPage() {
         </div>
       )}
 
-      <Box className="grid gap-4 p-4 sm:grid-cols-[1fr_auto_auto] sm:items-center sm:gap-8">
+      <Box className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center sm:gap-8">
         <LevelCard xp={user.xp} />
         <div className="flex gap-8">
           <div>
@@ -89,7 +89,7 @@ export default async function TodayPage() {
         <OverallGraph counts={counts} today={today} weekStart={user.weekStart} frozen={frozen} />
       </div>
 
-      <div className="order-1 grid gap-6 md:order-2 md:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="order-1 grid grid-cols-1 gap-6 md:order-2 md:grid-cols-[minmax(0,1fr)_340px]">
         <TodayHabits habits={habits} today={today} weekStart={user.weekStart} />
         <div className="flex flex-col gap-6">
           <DailyQuests quests={quests} />

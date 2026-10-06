@@ -70,7 +70,7 @@ export default async function PublicProfilePage({ params }: PageProps<"/u/[slug]
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-5xl gap-8 px-4 py-8 md:grid-cols-[260px_minmax(0,1fr)]">
+      <main className="mx-auto grid max-w-5xl grid-cols-1 gap-8 px-4 py-8 md:grid-cols-[260px_minmax(0,1fr)]">
         <aside className="space-y-5">
           <div className="flex items-center gap-4 md:block">
             <Identicon seed={viewer.id} size={96} className="ring-1 ring-line md:h-[260px] md:w-[260px]" />

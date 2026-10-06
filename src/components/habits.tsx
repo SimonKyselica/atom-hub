@@ -127,8 +127,9 @@ export function HabitList({
 
   return (
     <>
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <div>
+      {/* Wraps on phones: the buttons drop below the title instead of pushing past the screen edge. */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-48 flex-1">
           <h1 className="text-xl font-semibold">Habits</h1>
           <p className="text-sm text-muted">Your streaks, one green square at a time.</p>
         </div>
