@@ -21,7 +21,7 @@ export async function settleMissedDays(user: IUser, today: DateKey): Promise<boo
     { _id: user._id, settledThrough: user.settledThrough ?? null },
     { $set: { settledThrough: yesterday } },
   );
-  if (!claimed.modifiedCount || !user.settledThrough || user.freezes <= 0) return false;
+  if (!claimed.modifiedCount || !user.settledThrough || (user.freezes ?? 0) <= 0) return false;
 
   let from = addDays(user.settledThrough, 1);
   const floor = addDays(yesterday, -MAX_LOOKBACK_DAYS);

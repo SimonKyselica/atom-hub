@@ -76,15 +76,16 @@ export async function redeemReward(id: string): Promise<GameResult | ActionError
 /** Streak freeze: bought like a reward, kept in stock, spent automatically on a missed day. */
 export async function buyFreeze(): Promise<GameResult | ActionError> {
   const user = await requireUser();
+  // `$not: $gte` also matches accounts created before freezes existed (no field = 0 in stock).
   const paid = await User.updateOne(
-    { _id: user._id, coins: { $gte: FREEZE.cost }, freezes: { $lt: FREEZE.max } },
+    { _id: user._id, coins: { $gte: FREEZE.cost }, freezes: { $not: { $gte: FREEZE.max } } },
     { $inc: { coins: -FREEZE.cost, freezes: 1 } },
   );
   if (!paid.modifiedCount) {
-    return {
-      ok: false,
-      error: (user.freezes ?? 0) >= FREEZE.max ? `You can hold up to ${FREEZE.max} freezes.` : "Not enough coins yet — keep going!",
-    };
+    const now = await User.findById(user._id, { coins: 1, freezes: 1 }).lean();
+    if ((now?.freezes ?? 0) >= FREEZE.max) return { ok: false, error: `You can hold up to ${FREEZE.max} freezes.` };
+    if ((now?.coins ?? 0) < FREEZE.cost) return { ok: false, error: "Not enough coins yet — keep going!" };
+    return { ok: false, error: "Couldn't buy a freeze right now. Please try again." };
   }
   await Transaction.create({
     userId: user._id,

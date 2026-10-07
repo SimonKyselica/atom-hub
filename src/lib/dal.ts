@@ -18,10 +18,30 @@ export const getCurrentUser = cache(async (): Promise<IUser | null> => {
   if (!id) return null;
   await connectDB();
   const user = await User.findById(id).lean<IUser>();
+  if (user) await backfillDefaults(user);
   // First visit of the day: spend streak freezes on missed days, then reload.
   if (user && (await settleMissedDays(user, userToday(user)))) return User.findById(id).lean<IUser>();
   return user;
 });
+
+/**
+ * Accounts created before a feature existed lack its fields, and `.lean()` reads don't
+ * apply schema defaults. Fill them in once so queries like `freezes < 2` match.
+ */
+async function backfillDefaults(user: IUser) {
+  const defaults: Partial<IUser> = {
+    freezes: 0,
+    todoDigest: { enabled: false, time: "08:00" },
+    publicEnabled: false,
+    publicShowHabits: false,
+  };
+  const missing = Object.fromEntries(
+    Object.entries(defaults).filter(([key]) => user[key as keyof IUser] === undefined),
+  );
+  if (!Object.keys(missing).length) return;
+  await User.updateOne({ _id: user._id }, { $set: missing });
+  Object.assign(user, missing);
+}
 
 /** Use in every page and Server Action that needs a signed-in user. */
 export async function requireUser(): Promise<IUser> {

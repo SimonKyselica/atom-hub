@@ -50,8 +50,8 @@ export default async function TodayPage() {
           <p>
             <b>A streak freeze saved you</b> on{" "}
             {recentFreezes.map((d) => formatKey(d, { weekday: "long" })).join(" and ")}. Your streaks are intact
-            {user.freezes > 0 ? ` — ${user.freezes} freeze${user.freezes === 1 ? "" : "s"} left.` : "."}{" "}
-            {user.freezes === 0 && (
+            {(user.freezes ?? 0) > 0 ? ` — ${user.freezes} freeze${user.freezes === 1 ? "" : "s"} left.` : "."}{" "}
+            {(user.freezes ?? 0) === 0 && (
               <Link href="/shop" className="font-semibold text-accent hover:underline">
                 Restock in the shop
               </Link>

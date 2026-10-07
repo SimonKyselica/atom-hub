@@ -99,7 +99,7 @@ export async function toggleTodo(id: string, done: boolean): Promise<GameResult 
         difficulty: todo.difficulty,
         recurrence: todo.recurrence,
         dueDate: nextOccurrence(todo.dueDate, todo.recurrence, today),
-        subtasks: todo.subtasks.map((s) => ({ title: s.title, done: false })),
+        subtasks: (todo.subtasks ?? []).map((s) => ({ title: s.title, done: false })),
       });
       await Todo.updateOne({ _id: todo._id }, { $set: { spawnedId: next._id } });
     } else if (todo.spawnedId) {
